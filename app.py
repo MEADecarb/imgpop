@@ -3,8 +3,10 @@ from PIL import Image, ImageDraw, ImageFont
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.colors import blue
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from io import BytesIO
 
 # App title
@@ -31,8 +33,12 @@ def generate_interactive_pdf(image_path, popup_grid_squares, grid_rows, grid_col
   story.append(Spacer(1, 12))
 
   # Add image
-  story.append(Paragraph(f'<img src="{image_path}" width="500" height="375" />', styles['BodyText']))
-  story.append(Spacer(1, 12))
+  img = RLImage(image_path, width=500, height=375)
+  story.append(img)
+
+  # Create a separate canvas for annotations
+  c = canvas.Canvas(buffer)
+  c.setFont("Helvetica", 12)
 
   # Add interactive areas
   for square in popup_grid_squares:
@@ -42,16 +48,27 @@ def generate_interactive_pdf(image_path, popup_grid_squares, grid_rows, grid_col
       width = cell_width / inch
       height = cell_height / inch
 
-      story.append(Paragraph(
-          f'<link href="#{chr(65 + col)}{grid_rows - row}" '
-          f'rect="{x},{y},{width},{height}">'
-          f'<a name="{chr(65 + col)}{grid_rows - row}"></a>'
-          f'<b>{square["title"]}</b><br/>{square["text"]}</link>',
-          styles['BodyText']
-      ))
-      story.append(Spacer(1, 12))
+      # Add a clickable area
+      c.linkRect(f"#{chr(65 + col)}{grid_rows - row}", 
+                 f"#{chr(65 + col)}{grid_rows - row}", 
+                 (x*inch, y*inch, (x+width)*inch, (y+height)*inch), 
+                 relative=0)
 
+      # Add popup content
+      text = f"{square['title']}\n{square['text']}"
+      c.bookmarkPage(f"#{chr(65 + col)}{grid_rows - row}")
+      c.setFillColor(blue)
+      text_object = c.beginText(x*inch, y*inch)
+      for line in text.split('\n'):
+          text_object.textLine(line)
+      c.drawText(text_object)
+
+  # Build the document
   doc.build(story)
+  
+  # Add annotations to the PDF
+  c.save()
+
   buffer.seek(0)
   return buffer
 

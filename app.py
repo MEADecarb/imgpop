@@ -1,8 +1,14 @@
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from io import BytesIO
 
 # App title
-st.title("Interactive Image with Axis-based Popups and HTML Generation")
+st.title("Interactive Image with Axis-based Popups, HTML, and PDF Generation")
 
 # Instructions
 st.write("""
@@ -10,8 +16,44 @@ st.write("""
 2. Select a grid size (number of rows and columns).
 3. Choose which grid squares should have popups.
 4. Enter popup title and text for the selected grid squares.
-5. Preview the final image with vector icons and download the HTML for your GitHub-hosted interactive page.
+5. Preview the final image with vector icons and download the HTML and PDF for your interactive page.
 """)
+
+# Function to generate the interactive PDF
+def generate_interactive_pdf(image_path, popup_grid_squares, grid_rows, grid_cols, cell_width, cell_height):
+  buffer = BytesIO()
+  doc = SimpleDocTemplate(buffer, pagesize=letter)
+  styles = getSampleStyleSheet()
+  story = []
+
+  # Add title
+  story.append(Paragraph("Interactive Image", styles['Title']))
+  story.append(Spacer(1, 12))
+
+  # Add image
+  story.append(Paragraph(f'<img src="{image_path}" width="500" height="375" />', styles['BodyText']))
+  story.append(Spacer(1, 12))
+
+  # Add interactive areas
+  for square in popup_grid_squares:
+      col, row = square['col'], square['row']
+      x = (col * cell_width) / inch
+      y = ((grid_rows - row - 1) * cell_height) / inch
+      width = cell_width / inch
+      height = cell_height / inch
+
+      story.append(Paragraph(
+          f'<link href="#{chr(65 + col)}{grid_rows - row}" '
+          f'rect="{x},{y},{width},{height}">'
+          f'<a name="{chr(65 + col)}{grid_rows - row}"></a>'
+          f'<b>{square["title"]}</b><br/>{square["text"]}</link>',
+          styles['BodyText']
+      ))
+      story.append(Spacer(1, 12))
+
+  doc.build(story)
+  buffer.seek(0)
+  return buffer
 
 # Upload image file
 uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"])
@@ -50,7 +92,9 @@ if uploaded_file is not None:
       if row < grid_rows:  # Don't draw label for the last line
           # Draw y-axis labels (numbers)
           label = str(grid_rows - row)
-          label_width, label_height = draw_grid.textsize(label, font=font)
+          bbox = draw_grid.textbbox((0, 0), label, font=font)
+          label_width = bbox[2] - bbox[0]
+          label_height = bbox[3] - bbox[1]
           label_x = -label_width - 5  # Position labels to the left of the image
           label_y = y + (cell_height - label_height) / 2
           draw_grid.text((label_x, label_y), label, font=font, fill="black")
@@ -62,7 +106,9 @@ if uploaded_file is not None:
       if col < grid_cols:  # Don't draw label for the last line
           # Draw x-axis labels (letters)
           label = chr(65 + col)  # A, B, C, ...
-          label_width, label_height = draw_grid.textsize(label, font=font)
+          bbox = draw_grid.textbbox((0, 0), label, font=font)
+          label_width = bbox[2] - bbox[0]
+          label_height = bbox[3] - bbox[1]
           label_x = x + (cell_width - label_width) / 2
           label_y = img_height + 5  # Position labels below the image
           draw_grid.text((label_x, label_y), label, font=font, fill="black")
@@ -91,8 +137,8 @@ if uploaded_file is not None:
                   "text": popup_text
               })
 
-  # Button to generate preview and final image
-  if st.button("Generate Final Image, HTML, and Preview"):
+  # Button to generate preview, final image, HTML, and PDF
+  if st.button("Generate Final Image, HTML, PDF, and Preview"):
       # Add vector star icons in the final image at the selected grid locations
       html_icon_positions = []  # For HTML generation
       for square in popup_grid_squares:
@@ -210,6 +256,25 @@ if uploaded_file is not None:
               mime="text/html"
           )
 
+      # Generate interactive PDF
+      pdf_buffer = generate_interactive_pdf(
+          "final_image_with_icons.png",
+          popup_grid_squares,
+          grid_rows,
+          grid_cols,
+          cell_width,
+          cell_height
+      )
+
+      # Provide download button for PDF
+      st.download_button(
+          label="Download Interactive PDF",
+          data=pdf_buffer,
+          file_name="interactive_image.pdf",
+          mime="application/pdf"
+      )
+
 # Created/Modified files during execution:
 print("final_image_with_icons.png")
 print("interactive_image.html")
+print("interactive_image.pdf")

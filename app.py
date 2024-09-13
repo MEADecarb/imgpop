@@ -1,16 +1,8 @@
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.colors import blue
-from reportlab.pdfbase.pdfmetrics import stringWidth
-from io import BytesIO
 
 # App title
-st.title("Interactive Image with Axis-based Popups, HTML, and PDF Generation")
+st.title("Interactive Image with Axis-based Popups and HTML Generation")
 
 # Instructions
 st.write("""
@@ -18,59 +10,8 @@ st.write("""
 2. Select a grid size (number of rows and columns).
 3. Choose which grid squares should have popups.
 4. Enter popup title and text for the selected grid squares.
-5. Preview the final image with vector icons and download the HTML and PDF for your interactive page.
+5. Preview the final image with vector icons and download the HTML for your interactive page.
 """)
-
-# Function to generate the interactive PDF
-def generate_interactive_pdf(image_path, popup_grid_squares, grid_rows, grid_cols, cell_width, cell_height):
-  buffer = BytesIO()
-  doc = SimpleDocTemplate(buffer, pagesize=letter)
-  styles = getSampleStyleSheet()
-  story = []
-
-  # Add title
-  story.append(Paragraph("Interactive Image", styles['Title']))
-  story.append(Spacer(1, 12))
-
-  # Add image
-  img = RLImage(image_path, width=500, height=375)
-  story.append(img)
-
-  # Create a separate canvas for annotations
-  c = canvas.Canvas(buffer)
-  c.setFont("Helvetica", 12)
-
-  # Add interactive areas
-  for square in popup_grid_squares:
-      col, row = square['col'], square['row']
-      x = (col * cell_width) / inch
-      y = ((grid_rows - row - 1) * cell_height) / inch
-      width = cell_width / inch
-      height = cell_height / inch
-
-      # Add a clickable area
-      c.linkRect(f"#{chr(65 + col)}{grid_rows - row}", 
-                 f"#{chr(65 + col)}{grid_rows - row}", 
-                 (x*inch, y*inch, (x+width)*inch, (y+height)*inch), 
-                 relative=0)
-
-      # Add popup content
-      text = f"{square['title']}\n{square['text']}"
-      c.bookmarkPage(f"#{chr(65 + col)}{grid_rows - row}")
-      c.setFillColor(blue)
-      text_object = c.beginText(x*inch, y*inch)
-      for line in text.split('\n'):
-          text_object.textLine(line)
-      c.drawText(text_object)
-
-  # Build the document
-  doc.build(story)
-  
-  # Add annotations to the PDF
-  c.save()
-
-  buffer.seek(0)
-  return buffer
 
 # Upload image file
 uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"])
@@ -152,8 +93,8 @@ if uploaded_file is not None:
                   "text": popup_text
               })
 
-  # Button to generate preview, final image, HTML, and PDF
-  if st.button("Generate Final Image, HTML, PDF, and Preview"):
+  # Button to generate preview, final image, and HTML
+  if st.button("Generate Final Image, HTML, and Preview"):
       # Create a copy of the padded grid image for the final version
       final_img = padded_grid_img.copy()
       draw_final = ImageDraw.Draw(final_img)
@@ -271,25 +212,6 @@ if uploaded_file is not None:
               mime="text/html"
           )
 
-      # Generate interactive PDF
-      pdf_buffer = generate_interactive_pdf(
-          "final_image_with_icons.png",
-          popup_grid_squares,
-          grid_rows,
-          grid_cols,
-          cell_width,
-          cell_height
-      )
-
-      # Provide download button for PDF
-      st.download_button(
-          label="Download Interactive PDF",
-          data=pdf_buffer,
-          file_name="interactive_image.pdf",
-          mime="application/pdf"
-      )
-
 # Created/Modified files during execution:
 print("final_image_with_icons.png")
 print("interactive_image.html")
-print("interactive_image.pdf")

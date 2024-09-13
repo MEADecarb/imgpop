@@ -2,7 +2,7 @@ import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
 
 # App title
-st.title("Interactive Image with Grid-based Popups and HTML Generation")
+st.title("Interactive Image with Axis-based Popups and HTML Generation")
 
 # Instructions
 st.write("""
@@ -23,7 +23,7 @@ if uploaded_file is not None:
 
   # Allow the user to define the grid size
   grid_rows = st.number_input("Select number of grid rows", min_value=2, max_value=20, value=5)
-  grid_cols = st.number_input("Select number of grid columns", min_value=2, max_value=20, value=5)
+  grid_cols = st.number_input("Select number of grid columns", min_value=2, max_value=26, value=5)  # Max 26 for A-Z
 
   # Calculate the grid cell dimensions based on the image size
   cell_width = img_width / grid_cols
@@ -36,45 +36,54 @@ if uploaded_file is not None:
   draw_grid = ImageDraw.Draw(grid_img)
   draw_final = ImageDraw.Draw(final_img)
 
-  # Load a font for grid labels with size 22
+  # Load a font for axis labels with size 22
   try:
-      font = ImageFont.truetype("arial.ttf", 100)  # Use your system font here
+      font = ImageFont.truetype("arial.ttf", 22)  # Use your system font here, size 22
   except IOError:
       font = ImageFont.load_default()  # Use default if the specified font is not found
 
-  # Draw grid and add labels on the grid image
-  for row in range(grid_rows):
-      for col in range(grid_cols):
-          # Coordinates of the grid cell
-          x = col * cell_width
-          y = row * cell_height
-
-          # Draw the grid on the preview image
-          draw_grid.rectangle([x, y, x + cell_width, y + cell_height], outline="red", width=2)
-
-          # Add grid labels (e.g., A1, B2, etc.)
-          label = f"{chr(65 + row)}{col+1}"
-          label_x = x + cell_width / 2 - 11  # Adjusted for smaller font size
-          label_y = y + cell_height / 2 - 11  # Adjusted for smaller font size
-
-          # Draw white halo (outline) and then the black text for readability
-          for dx in [-1, 1]:
-              for dy in [-1, 1]:
-                  draw_grid.text((label_x + dx, label_y + dy), label, font=font, fill="white")
+  # Draw grid and add axes on the grid image
+  for row in range(grid_rows + 1):
+      y = row * cell_height
+      draw_grid.line([(0, y), (img_width, y)], fill="red", width=2)
+      
+      if row < grid_rows:  # Don't draw label for the last line
+          # Draw y-axis labels (numbers)
+          label = str(grid_rows - row)
+          label_width, label_height = draw_grid.textsize(label, font=font)
+          label_x = -label_width - 5  # Position labels to the left of the image
+          label_y = y + (cell_height - label_height) / 2
           draw_grid.text((label_x, label_y), label, font=font, fill="black")
 
-  # Display the image with the grid and labels
-  st.image(grid_img, caption="Image with Grid and Labels (Preview)", use_column_width=True)
+  for col in range(grid_cols + 1):
+      x = col * cell_width
+      draw_grid.line([(x, 0), (x, img_height)], fill="red", width=2)
+      
+      if col < grid_cols:  # Don't draw label for the last line
+          # Draw x-axis labels (letters)
+          label = chr(65 + col)  # A, B, C, ...
+          label_width, label_height = draw_grid.textsize(label, font=font)
+          label_x = x + (cell_width - label_width) / 2
+          label_y = img_height + 5  # Position labels below the image
+          draw_grid.text((label_x, label_y), label, font=font, fill="black")
 
-  # The rest of the code remains the same...
+  # Create a new image with extra space for axis labels
+  padding = 30  # Adjust this value to increase/decrease padding around the image
+  new_width = img_width + padding * 2
+  new_height = img_height + padding * 2
+  padded_grid_img = Image.new("RGB", (new_width, new_height), color="white")
+  padded_grid_img.paste(grid_img, (padding, padding))
+
+  # Display the image with the grid and axes
+  st.image(padded_grid_img, caption="Image with Grid and Axes (Preview)", use_column_width=True)
 
   # Allow the user to select grid squares for popups
   popup_grid_squares = []
   for row in range(grid_rows):
       for col in range(grid_cols):
-          if st.checkbox(f"Popup at Grid {chr(65 + row)}{col+1}"):
-              popup_title = st.text_input(f"Enter popup title for Grid {chr(65 + row)}{col+1}")
-              popup_text = st.text_area(f"Enter popup text for Grid {chr(65 + row)}{col+1}")
+          if st.checkbox(f"Popup at Grid {chr(65 + col)}{grid_rows - row}"):
+              popup_title = st.text_input(f"Enter popup title for Grid {chr(65 + col)}{grid_rows - row}")
+              popup_text = st.text_area(f"Enter popup text for Grid {chr(65 + col)}{grid_rows - row}")
               popup_grid_squares.append({
                   "row": row,
                   "col": col,
@@ -101,14 +110,18 @@ if uploaded_file is not None:
 
           # Store the coordinates for the HTML
           html_icon_positions.append({
-              "x": x_center,
-              "y": y_center,
+              "x": x_center + padding,  # Add padding to account for the new image size
+              "y": y_center + padding,  # Add padding to account for the new image size
               "title": square["title"],
               "text": square["text"]
           })
 
+      # Create a new final image with extra space for axis labels
+      padded_final_img = Image.new("RGB", (new_width, new_height), color="white")
+      padded_final_img.paste(final_img, (padding, padding))
+
       # Display the final image (with star icons but no grid lines or labels)
-      st.image(final_img, caption="Final Image with Vector Icons", use_column_width=True)
+      st.image(padded_final_img, caption="Final Image with Vector Icons", use_column_width=True)
 
       # Generate and display a popup preview
       if popup_grid_squares:
@@ -121,7 +134,7 @@ if uploaded_file is not None:
           st.write("This is a preview of how the popups will look when a user hovers over the vector icons.")
 
       # Save the final image as a downloadable file
-      final_img.save("final_image_with_icons.png")
+      padded_final_img.save("final_image_with_icons.png")
       with open("final_image_with_icons.png", "rb") as file:
           btn = st.download_button(
               label="Download Final Image",
@@ -138,10 +151,28 @@ if uploaded_file is not None:
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>Interactive Image with Popups</title>
-          
+          <style>
+              .image-container {{
+                  position: relative;
+                  display: inline-block;
+              }}
+              .icon {{
+                  position: absolute;
+                  width: 20px;
+                  height: 20px;
+                  cursor: pointer;
+              }}
+              .popup {{
+                  display: none;
+                  position: absolute;
+                  background-color: white;
+                  border: 1px solid black;
+                  padding: 10px;
+                  z-index: 1;
+              }}
+          </style>
       </head>
       <body>
-
       <div class="image-container">
           <img src="final_image_with_icons.png" alt="Interactive Image">
       '''

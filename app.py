@@ -38,7 +38,7 @@ if uploaded_file is not None:
 
   # Load a font for grid labels with size 22
   try:
-      font = ImageFont.truetype("arial.ttf", 44)  # Use your system font here
+      font = ImageFont.truetype("arial.ttf", 100)  # Use your system font here
   except IOError:
       font = ImageFont.load_default()  # Use default if the specified font is not found
 

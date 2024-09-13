@@ -1,9 +1,8 @@
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
-import math
 
 # App title
-st.title("Interactive Image with Grid-based Popups")
+st.title("Interactive Image with Grid-based Popups and HTML Generation")
 
 # Instructions
 st.write("""
@@ -11,7 +10,7 @@ st.write("""
 2. Select a grid size (number of rows and columns).
 3. Choose which grid squares should have popups.
 4. Enter popup title and text for the selected grid squares.
-5. A star icon will appear on the grid areas that contain a popup.
+5. Preview the final image with vector icons and download the HTML for your GitHub-hosted interactive page.
 """)
 
 # Upload image file
@@ -20,39 +19,52 @@ uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg
 if uploaded_file is not None:
     # Load the uploaded image
     img = Image.open(uploaded_file)
-
-    # Display the uploaded image
-    st.image(img, caption="Uploaded Image", use_column_width=True)
+    img_width, img_height = img.size
 
     # Allow the user to define the grid size
     grid_rows = st.number_input("Select number of grid rows", min_value=2, max_value=20, value=5)
     grid_cols = st.number_input("Select number of grid columns", min_value=2, max_value=20, value=5)
 
     # Calculate the grid cell dimensions based on the image size
-    img_width, img_height = img.size
     cell_width = img_width / grid_cols
     cell_height = img_height / grid_rows
 
-    # Create a copy of the image and draw the grid on it
+    # Create two copies of the image: one for grid preview and one for final output
     grid_img = img.copy()
-    draw = ImageDraw.Draw(grid_img)
+    final_img = img.copy()
 
-    # Draw grid and add labels
+    draw_grid = ImageDraw.Draw(grid_img)
+    draw_final = ImageDraw.Draw(final_img)
+
+    # Load a font for grid labels
+    try:
+        font = ImageFont.truetype("arial.ttf", 40)  # Use your system font here
+    except IOError:
+        font = ImageFont.load_default()  # Use default if the specified font is not found
+
+    # Draw grid and add labels on the grid image
     for row in range(grid_rows):
         for col in range(grid_cols):
-            # Draw grid lines
+            # Coordinates of the grid cell
             x = col * cell_width
             y = row * cell_height
-            draw.rectangle([x, y, x + cell_width, y + cell_height], outline="red", width=2)
 
-            # Add grid labels (e.g., A1, B1, etc.)
+            # Draw the grid on the preview image
+            draw_grid.rectangle([x, y, x + cell_width, y + cell_height], outline="red", width=2)
+
+            # Add grid labels (e.g., A1, B2, etc.)
             label = f"{chr(65 + row)}{col+1}"
-            label_x = x + cell_width / 2 - 10
-            label_y = y + cell_height / 2 - 10
-            draw.text((label_x, label_y), label, fill="blue")
+            label_x = x + cell_width / 2 - 20
+            label_y = y + cell_height / 2 - 20
 
-    # Display the image with grid and labels
-    st.image(grid_img, caption="Image with Grid and Labels", use_column_width=True)
+            # Draw white halo (outline) and then the black text for readability
+            for dx in [-1.5, 1.5]:
+                for dy in [-1.5, 1.5]:
+                    draw_grid.text((label_x + dx, label_y + dy), label, font=font, fill="white")
+            draw_grid.text((label_x, label_y), label, font=font, fill="black")
+
+    # Display the image with the grid and labels
+    st.image(grid_img, caption="Image with Grid and Labels (Preview)", use_column_width=True)
 
     # Allow the user to select grid squares for popups
     popup_grid_squares = []
@@ -68,99 +80,129 @@ if uploaded_file is not None:
                     "text": popup_text
                 })
 
-    # Button to generate HTML code for the popups
-    if st.button("Generate Interactive HTML"):
-        html_output = '''
+    # Button to generate preview and final image
+    if st.button("Generate Final Image, HTML, and Preview"):
+        # Add vector star icons in the final image at the selected grid locations
+        html_icon_positions = []  # For HTML generation
+        for square in popup_grid_squares:
+            # Calculate the center of the grid cell for the star placement
+            x_center = square["col"] * cell_width + cell_width / 2
+            y_center = square["row"] * cell_height + cell_height / 2
+
+            # Draw the star icon in the final image
+            draw_final.polygon(
+                [(x_center, y_center - 10), (x_center + 6, y_center - 3),
+                 (x_center + 10, y_center + 8), (x_center, y_center + 3),
+                 (x_center - 10, y_center + 8), (x_center - 6, y_center - 3)],
+                fill="red", outline="black", width=1
+            )
+
+            # Store the coordinates for the HTML
+            html_icon_positions.append({
+                "x": x_center,
+                "y": y_center,
+                "title": square["title"],
+                "text": square["text"]
+            })
+
+        # Display the final image (with star icons but no grid lines or labels)
+        st.image(final_img, caption="Final Image with Vector Icons", use_column_width=True)
+
+        # Generate and display a popup preview
+        if popup_grid_squares:
+            st.write("**Popup Preview**")
+
+            for square in popup_grid_squares:
+                st.markdown(f"### {square['title']}")
+                st.write(square['text'])
+
+            st.write("This is a preview of how the popups will look when a user hovers over the vector icons.")
+
+        # Save the final image as a downloadable file
+        final_img.save("final_image_with_icons.png")
+        with open("final_image_with_icons.png", "rb") as file:
+            btn = st.download_button(
+                label="Download Final Image",
+                data=file,
+                file_name="final_image_with_icons.png",
+                mime="image/png"
+            )
+
+        # Generate HTML code for GitHub Pages-hosted interactive webpage
+        html_code = f'''
         <!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Interactive Grid Popup</title>
+            <title>Interactive Image with Popups</title>
             <style>
-                body {
+                body {{
                     font-family: Arial, sans-serif;
-                }
-                .image-container {
+                }}
+                .image-container {{
                     position: relative;
                     display: inline-block;
-                }
-                .image-container img {
-                    width: 600px;
+                }}
+                .image-container img {{
+                    width: 100%;
                     height: auto;
-                }
-                .popup {
+                }}
+                .popup {{
                     display: none;
                     position: absolute;
-                    background-color: rgba(0, 0, 0, 0.7);
-                    color: #fff;
+                    background-color: rgba(0, 0, 0, 0.8);
+                    color: white;
                     padding: 10px;
-                    border-radius: 5px;
-                    width: 200px;
-                }
-                .popup-visible {
-                    display: block;
-                }
-                .icon {
+                    border-radius: 8px;
+                    width: 250px;
+                    z-index: 1;
+                }}
+                .icon {{
                     position: absolute;
                     width: 20px;
                     height: 20px;
                     background-color: red;
                     clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
                     border: 1px solid black;
-                }
+                }}
             </style>
         </head>
         <body>
 
         <div class="image-container">
-            <img src="your-image.jpg" alt="Interactive Image">
+            <img src="final_image_with_icons.png" alt="Interactive Image">
         '''
-
-        # Generate popups and star icons for each selected grid square
-        for square in popup_grid_squares:
-            x = square["col"] * cell_width + cell_width / 2 - 10  # Center the icon in the grid square
-            y = square["row"] * cell_height + cell_height / 2 - 10
-
-            # Popup content
-            html_output += f'''
-            <div class="popup" style="top: {y}px; left: {x}px;">
-                <h2>{square['title']}</h2>
-                <p>{square['text']}</p>
+        
+        # Insert the icons and popup divs into the HTML
+        for icon in html_icon_positions:
+            html_code += f'''
+            <div class="icon" style="top: {icon['y']}px; left: {icon['x']}px;" 
+                 onmouseover="document.getElementById('popup-{icon['x']}-{icon['y']}').style.display='block'"
+                 onmouseout="document.getElementById('popup-{icon['x']}-{icon['y']}').style.display='none'">
+            </div>
+            <div id="popup-{icon['x']}-{icon['y']}" class="popup" style="top: {icon['y'] + 25}px; left: {icon['x']}px;">
+                <h2>{icon['title']}</h2>
+                <p>{icon['text']}</p>
             </div>
             '''
 
-            # Star icon for the grid area with a popup
-            html_output += f'''
-            <div class="icon" style="top: {y}px; left: {x}px;"></div>
-            '''
-
-        html_output += '''
-        <script>
-            // JavaScript to toggle popups on hover
-            const popups = document.querySelectorAll('.popup');
-            const icons = document.querySelectorAll('.icon');
-            document.querySelector('.image-container').addEventListener('mousemove', (event) => {
-                popups.forEach((popup, index) => {
-                    const rect = icons[index].getBoundingClientRect();
-                    if (event.clientX >= rect.left && event.clientX <= rect.right &&
-                        event.clientY >= rect.top && event.clientY <= rect.bottom) {
-                        popup.classList.add('popup-visible');
-                    } else {
-                        popup.classList.remove('popup-visible');
-                    }
-                });
-            });
-        </script>
+        html_code += '''
+        </div>
         </body>
         </html>
         '''
 
-        # Display the generated HTML
-        st.code(html_output, language='html')
+        # Display the generated HTML code
+        st.code(html_code, language="html")
 
-        # Save the HTML to file
-        with open("interactive_image_grid.html", "w") as f:
-            f.write(html_output)
-
-        st.success("HTML file generated! You can now upload this to GitHub Pages.")
+        # Save the HTML code as a downloadable file
+        with open("interactive_image.html", "w") as file:
+            file.write(html_code)
+        with open("interactive_image.html", "rb") as file:
+            btn = st.download_button(
+                label="Download HTML for GitHub Pages",
+                data=file,
+                file_name="interactive_image.html",
+                mime="text/html"
+            )

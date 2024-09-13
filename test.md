@@ -1,7 +1,7 @@
 ---
-title: PAGE TITLE HERE
+title: Test
 layout: template
-filename: NAME OF THIS .md FILE HERE
+filename: test.md
 --- 
 
 <!DOCTYPE html>
